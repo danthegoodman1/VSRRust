@@ -1,3 +1,21 @@
+pub enum RPC {
+    Request(Request),
+    Prepare(Prepare),
+    PrepareOk(PrepareOk),
+    Reply(Reply),
+    Commit(Commit),
+    StartViewChange(StartViewChange),
+    DoViewChange(DoViewChange),
+    StartView(StartView),
+    Recovery(Recovery),
+    RecoveryResponse(RecoveryResponse),
+}
+
+pub struct RespondableRPC {
+    pub rpc: RPC,
+    pub sender: tokio::sync::mpsc::Sender<RPC>,
+}
+
 #[derive(Debug)]
 pub struct Request {
     /// The operation and its arguments
