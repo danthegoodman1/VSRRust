@@ -126,13 +126,14 @@ impl Node {
                 .request_number = request.request_number;
         }
 
-        // TODO: Send Prepare RPC to other replicas
-        let rpc = RPC::Prepare(Prepare {
+        let replica_request = RPC::Prepare(Prepare {
             view_number: self.state.view_number,
             op_number: self.state.op_number,
             request: request.clone(),
             commit_number: self.state.commit_number,
         });
+
+        // TODO: send RPC to other replicas
 
         // TODO: up call to application
         let application_response = vec![];
