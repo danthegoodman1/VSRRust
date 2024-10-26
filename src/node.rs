@@ -71,6 +71,12 @@ impl NodeState {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum RPCError {
+    #[error("dropped request")]
+    DroppedRequest { reason: String },
+}
+
 impl Node {
     pub fn new(id: usize, nodes: Vec<NodeIdentifier>) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -95,8 +101,11 @@ impl Node {
                     }
                 }
 
-                // TODO: drop the request
-                return Err("Request number is out of order, dropping".into());
+                // drop the request
+                return Err(RPCError::DroppedRequest {
+                    reason: "Request number is out of order".to_string(),
+                }
+                .into());
             }
             false
         } else {
