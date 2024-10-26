@@ -1,16 +1,19 @@
+use std::{collections::HashMap, fmt};
+
+use crate::rpc::Request;
+
+#[derive(Debug)]
 pub struct Node {
     // Must be unique to the node
     pub id: usize,
+    state: NodeState,
 }
 
+#[derive(Debug)]
 pub struct NodeIdentifier {
     pub id: usize,
     pub address: String,
 }
-
-use std::{collections::HashMap, fmt};
-
-use crate::rpc::Request;
 
 #[derive(Debug)]
 pub enum NodeStatus {
@@ -29,6 +32,7 @@ impl fmt::Display for NodeStatus {
     }
 }
 
+#[derive(Debug)]
 struct ClientTableEntry {
     /// The request number of the last request sent to the client
     pub request_number: usize,
@@ -36,6 +40,7 @@ struct ClientTableEntry {
     pub last_request: Option<Request>,
 }
 
+#[derive(Debug)]
 pub struct NodeState {
     /// Sorted array of nodes
     pub nodes: Vec<NodeIdentifier>,
