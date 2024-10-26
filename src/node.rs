@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fmt};
 
-use crate::rpc::{Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC};
+use serde::{Deserialize, Serialize};
+
+use crate::rpc::{Commit, Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC};
 
 #[derive(Debug)]
 pub struct Node {
@@ -51,9 +53,15 @@ pub struct NodeState {
     pub view_number: usize,
     pub status: NodeStatus,
     pub op_number: usize,
-    log: Vec<Request>, // TODO: make this a trait so it can be modular
+    log: Vec<LogEntry>, // TODO: make this a trait so it can be modular
     pub commit_number: usize,
     client_table: HashMap<usize, ClientTableEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LogEntry {
+    pub op_number: usize,
+    pub request: Request,
 }
 
 impl NodeState {
@@ -124,7 +132,10 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(request.clone());
+        self.state.log.push(LogEntry {
+            op_number: self.state.op_number,
+            request: request.clone(),
+        });
 
         // Update the client table only if it's not a new client (we already updated the request number)
         if !new_client {
@@ -144,8 +155,8 @@ impl Node {
 
         // TODO: send RPC to other replicas
 
-        // TODO: up call to application
-        let application_response = vec![];
+        // up call to application
+        let application_response = self.upcall_application(request.payload).await?;
 
         // increment commit number
         self.state.commit_number += 1;
@@ -157,68 +168,93 @@ impl Node {
         })
     }
 
-    pub fn handle_peer_rpc(&mut self, rpc: RPC) -> Result<RPC, Box<dyn std::error::Error>> {
+    pub async fn handle_peer_rpc(&mut self, rpc: RPC) -> Result<RPC, Box<dyn std::error::Error>> {
         match rpc {
             RPC::Prepare(prepare) => {
-                let response = self.handle_prepare(prepare)?;
+                let response = self.prepare(prepare).await?;
                 Ok(RPC::PrepareOk(response))
             }
             _ => panic!("Unsupported RPC"),
         }
     }
 
-    fn handle_prepare(&mut self, rpc: Prepare) -> Result<PrepareOk, Box<dyn std::error::Error>> {
+    async fn prepare(&mut self, rpc: Prepare) -> Result<PrepareOk, Box<dyn std::error::Error>> {
         // TODO: check that this OP number is in order, if not, state transfer
 
         // update the op number
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(rpc.request.clone());
-
-        {
-            // TODO: verify that the commit number is in the log, if not, state transfer
-            // TODO: call previous commit to application code from log
-            // TODO: can do this all in the background since it's in the log, as long as it's in order, so we can batch the upcalls
-            // increment commit number
-            self.state.commit_number += 1;
-
-            let application_response: Vec<u8> = Vec::new();
-
-            // update the client table
-            let committed_request = self.state.log.get(0).unwrap(); // TODO: get the actual item
-            if let Some(entry) = self
-                .state
-                .client_table
-                .get_mut(&committed_request.client_id)
-            {
-                // update the client table entry
-                entry.last_reply = Some(Reply {
-                    view_number: self.state.view_number,
-                    request_number: committed_request.request_number,
-                    payload: application_response,
-                });
-            } else {
-                // insert the client table entry
-                self.state.client_table.insert(
-                    committed_request.client_id,
-                    ClientTableEntry {
-                        request_number: committed_request.request_number,
-                        last_reply: Some(Reply {
-                            view_number: self.state.view_number,
-                            request_number: committed_request.request_number,
-                            payload: application_response,
-                        }),
-                    },
-                );
-            }
-        }
+        self.state.log.push(LogEntry {
+            op_number: self.state.op_number,
+            request: rpc.request.clone(),
+        });
 
         Ok(PrepareOk {
             view_number: self.state.view_number,
             op_number: self.state.op_number,
             node_id: self.id,
         })
+    }
+
+    /// In this case, the commit number is the op number
+    async fn commit_op(
+        &mut self,
+        view_number: usize,
+        commit_number: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: verify that the commit number with view number is in the log, if not, state transfer
+        // TODO: can do this all in the background since it's in the log, as long as it's in order, so we can batch the upcalls
+        // TODO: we can also commit anything lower than this in the log if it has not been too
+
+        // Get the committed request without holding a mutable reference
+        let committed_request = self
+            .state
+            .log
+            .get(commit_number)
+            .cloned()
+            .ok_or_else(|| Box::<dyn std::error::Error>::from("Log entry not found"))?;
+
+        // Call previous commit to application code from log
+        let application_response = self
+            .upcall_application(committed_request.request.payload.clone())
+            .await?;
+
+        // Increment commit number
+        self.state.commit_number += 1;
+
+        // Update the client table
+        self.update_client_table(&committed_request, application_response);
+
+        Ok(())
+    }
+
+    fn update_client_table(&mut self, committed_request: &LogEntry, application_response: Vec<u8>) {
+        let client_id = committed_request.request.client_id;
+        let request_number = committed_request.request.request_number;
+
+        let entry = self
+            .state
+            .client_table
+            .entry(client_id)
+            .or_insert(ClientTableEntry {
+                request_number,
+                last_reply: None,
+            });
+
+        entry.request_number = request_number;
+        entry.last_reply = Some(Reply {
+            view_number: self.state.view_number,
+            request_number,
+            payload: application_response,
+        });
+    }
+
+    async fn upcall_application(
+        &mut self,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        panic!("Not implemented");
     }
 
     pub async fn start(self) -> Result<(), Box<dyn std::error::Error>> {

@@ -33,8 +33,8 @@ pub struct Request {
 pub struct Prepare {
     pub view_number: usize,
     pub request: Request,
-    pub op_number: usize,
-    pub commit_number: usize, // the last committed op number
+    pub op_number: usize,     // initially 0, a 0 value never serves a request
+    pub commit_number: usize, // the last committed op number, 0 is ignored
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
