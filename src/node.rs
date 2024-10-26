@@ -181,14 +181,13 @@ impl Node {
                     .await?;
                 Ok(None)
             }
-            RPC::Request(request) => todo!(),
             RPC::PrepareOk(prepare_ok) => todo!(),
-            RPC::Reply(reply) => todo!(),
             RPC::StartViewChange(start_view_change) => todo!(),
             RPC::DoViewChange(do_view_change) => todo!(),
             RPC::StartView(start_view) => todo!(),
             RPC::Recovery(recovery) => todo!(),
             RPC::RecoveryResponse(recovery_response) => todo!(),
+            _ => Err("Unsupported peer RPC".into()),
         }
     }
 
