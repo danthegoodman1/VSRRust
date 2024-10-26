@@ -167,11 +167,19 @@ impl Node {
         })
     }
 
-    pub async fn handle_peer_rpc(&mut self, rpc: RPC) -> Result<RPC, Box<dyn std::error::Error>> {
+    pub async fn handle_peer_rpc(
+        &mut self,
+        rpc: RPC,
+    ) -> Result<Option<RPC>, Box<dyn std::error::Error>> {
         match rpc {
             RPC::Prepare(prepare) => {
                 let response = self.prepare(prepare).await?;
-                Ok(RPC::PrepareOk(response))
+                Ok(Some(RPC::PrepareOk(response)))
+            }
+            RPC::Commit(commit_op) => {
+                self.commit_op(commit_op.view_number, commit_op.commit_number)
+                    .await?;
+                Ok(None)
             }
             _ => panic!("Unsupported RPC"),
         }
