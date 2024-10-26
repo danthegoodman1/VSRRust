@@ -82,7 +82,10 @@ impl Node {
         }
     }
 
-    pub async fn handle_client_request(&mut self, request: Request) -> Result<Reply, Box<dyn std::error::Error>> {
+    pub async fn handle_client_request(
+        &mut self,
+        request: Request,
+    ) -> Result<Reply, Box<dyn std::error::Error>> {
         let new_client = if let Some(entry) = self.state.client_table.get_mut(&request.client_id) {
             if request.request_number <= entry.request_number {
                 if request.request_number == entry.request_number {
@@ -98,10 +101,13 @@ impl Node {
             false
         } else {
             // We need to add this client to the client table
-            self.state.client_table.insert(request.client_id, ClientTableEntry {
-                request_number: request.request_number,
-                last_request: None,
-            });
+            self.state.client_table.insert(
+                request.client_id,
+                ClientTableEntry {
+                    request_number: request.request_number,
+                    last_request: None,
+                },
+            );
             true
         };
 
@@ -113,7 +119,11 @@ impl Node {
 
         // Update the client table only if it's not a new client (we already updated the request number)
         if !new_client {
-            self.state.client_table.get_mut(&request.client_id).unwrap().request_number = request.request_number;
+            self.state
+                .client_table
+                .get_mut(&request.client_id)
+                .unwrap()
+                .request_number = request.request_number;
         }
 
         // TODO: Send Prepare RPC to other replicas
@@ -142,7 +152,7 @@ impl Node {
             RPC::Prepare(prepare) => {
                 let response = self.handle_prepare(prepare)?;
                 Ok(RPC::PrepareOk(response))
-            },
+            }
             _ => panic!("Unsupported RPC"),
         }
     }
@@ -156,10 +166,13 @@ impl Node {
         // append to the log
         self.state.log.push(rpc.payload.clone());
 
-        // TODO: verify that the commit number is in the log, if not, state transfer
-        // TODO: call previous commit to application code from log
-        // increment commit number
-        self.state.commit_number += 1;
+        {
+            // TODO: verify that the commit number is in the log, if not, state transfer
+            // TODO: call previous commit to application code from log
+            // TODO: can do this all in the bg as well
+            // increment commit number
+            self.state.commit_number += 1;
+        }
 
         Ok(PrepareOk {
             view_number: self.state.view_number,

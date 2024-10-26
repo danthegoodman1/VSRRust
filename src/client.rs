@@ -1,4 +1,7 @@
-use crate::{node::NodeIdentifier, rpc::{Reply, Request, RPC}};
+use crate::{
+    node::NodeIdentifier,
+    rpc::{Reply, Request, RPC},
+};
 
 pub struct Client {
     pub id: usize,
