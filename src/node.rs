@@ -1,8 +1,15 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use serde::{Deserialize, Serialize};
 
-use crate::rpc::{Commit, Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC};
+use crate::{
+    log::{LogEntry, LogEntryKey},
+    rpc::{Commit, Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC},
+};
 
 #[derive(Debug)]
 pub struct Node {
@@ -53,15 +60,9 @@ pub struct NodeState {
     pub view_number: usize,
     pub status: NodeStatus,
     pub op_number: usize,
-    log: Vec<LogEntry>, // TODO: make this a trait so it can be modular
+    log: BTreeMap<LogEntryKey, LogEntry>, // TODO: make this a trait so it can be modular
     pub commit_number: usize,
     client_table: HashMap<usize, ClientTableEntry>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LogEntry {
-    pub op_number: usize,
-    pub request: Request,
 }
 
 impl NodeState {
@@ -72,7 +73,7 @@ impl NodeState {
             view_number: 0,
             status: NodeStatus::Normal,
             op_number: 0,
-            log: vec![],
+            log: BTreeMap::new(),
             commit_number: 0,
             client_table: HashMap::new(),
         }
@@ -132,10 +133,12 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(LogEntry {
+        let log_entry = LogEntry {
+            view_number: self.state.view_number,
             op_number: self.state.op_number,
             request: request.clone(),
-        });
+        };
+        self.state.log.insert(log_entry.key(), log_entry);
 
         // Update the client table only if it's not a new client (we already updated the request number)
         if !new_client {
@@ -185,10 +188,12 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(LogEntry {
+        let log_entry = LogEntry {
+            view_number: self.state.view_number,
             op_number: self.state.op_number,
             request: rpc.request.clone(),
-        });
+        };
+        self.state.log.insert(log_entry.key(), log_entry);
 
         Ok(PrepareOk {
             view_number: self.state.view_number,
@@ -211,7 +216,7 @@ impl Node {
         let committed_request = self
             .state
             .log
-            .get(commit_number)
+            .get(&LogEntryKey::new(view_number, commit_number))
             .cloned()
             .ok_or_else(|| Box::<dyn std::error::Error>::from("Log entry not found"))?;
 
