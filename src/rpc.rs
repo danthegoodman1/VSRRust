@@ -32,7 +32,7 @@ pub struct Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prepare {
     pub view_number: usize,
-    pub payload: Vec<u8>,
+    pub request: Request,
     pub op_number: usize,
     pub commit_number: usize, // the last committed op number
 }

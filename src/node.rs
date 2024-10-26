@@ -39,7 +39,7 @@ struct ClientTableEntry {
     /// The request number of the last request sent to the client
     pub request_number: usize,
     /// The last request sent to the client, if it was executed
-    pub last_request: Option<Reply>,
+    pub last_reply: Option<Reply>,
 }
 
 #[derive(Debug)]
@@ -51,7 +51,7 @@ pub struct NodeState {
     pub view_number: usize,
     pub status: NodeStatus,
     pub op_number: usize,
-    log: Vec<Vec<u8>>, // TODO: make this a trait so it can be modular
+    log: Vec<Request>, // TODO: make this a trait so it can be modular
     pub commit_number: usize,
     client_table: HashMap<usize, ClientTableEntry>,
 }
@@ -90,7 +90,7 @@ impl Node {
             if request.request_number <= entry.request_number {
                 if request.request_number == entry.request_number {
                     // send the most recent response if we have it
-                    if let Some(reply) = &entry.last_request {
+                    if let Some(reply) = &entry.last_reply {
                         return Ok(reply.clone());
                     }
                 }
@@ -105,7 +105,7 @@ impl Node {
                 request.client_id,
                 ClientTableEntry {
                     request_number: request.request_number,
-                    last_request: None,
+                    last_reply: None,
                 },
             );
             true
@@ -115,7 +115,7 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(request.payload.clone());
+        self.state.log.push(request.clone());
 
         // Update the client table only if it's not a new client (we already updated the request number)
         if !new_client {
@@ -130,12 +130,12 @@ impl Node {
         let rpc = RPC::Prepare(Prepare {
             view_number: self.state.view_number,
             op_number: self.state.op_number,
-            payload: request.payload,
+            request: request.clone(),
             commit_number: self.state.commit_number,
         });
 
         // TODO: up call to application
-        let response_payload = vec![];
+        let application_response = vec![];
 
         // increment commit number
         self.state.commit_number += 1;
@@ -143,7 +143,7 @@ impl Node {
         Ok(Reply {
             view_number: self.state.view_number,
             request_number: request.request_number,
-            payload: response_payload,
+            payload: application_response,
         })
     }
 
@@ -164,14 +164,44 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(rpc.payload.clone());
+        self.state.log.push(rpc.request.clone());
 
         {
             // TODO: verify that the commit number is in the log, if not, state transfer
             // TODO: call previous commit to application code from log
-            // TODO: can do this all in the bg as well
+            // TODO: can do this all in the background since it's in the log, as long as it's in order, so we can batch the upcalls
             // increment commit number
             self.state.commit_number += 1;
+
+            let application_response: Vec<u8> = Vec::new();
+
+            // update the client table
+            let committed_request = self.state.log.get(0).unwrap(); // TODO: get the actual item
+            if let Some(entry) = self
+                .state
+                .client_table
+                .get_mut(&committed_request.client_id)
+            {
+                // update the client table entry
+                entry.last_reply = Some(Reply {
+                    view_number: self.state.view_number,
+                    request_number: committed_request.request_number,
+                    payload: application_response,
+                });
+            } else {
+                // insert the client table entry
+                self.state.client_table.insert(
+                    committed_request.client_id,
+                    ClientTableEntry {
+                        request_number: committed_request.request_number,
+                        last_reply: Some(Reply {
+                            view_number: self.state.view_number,
+                            request_number: committed_request.request_number,
+                            payload: application_response,
+                        }),
+                    },
+                );
+            }
         }
 
         Ok(PrepareOk {
