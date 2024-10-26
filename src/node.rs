@@ -81,11 +81,11 @@ impl Node {
         }
     }
 
-    pub async fn send_update(&self, update: RPC) -> Result<tokio::sync::mpsc::Receiver<RPC>, Box<dyn std::error::Error>> {
+    pub async fn process_request(&self, request: Request) -> Result<tokio::sync::mpsc::Receiver<RPC>, Box<dyn std::error::Error>> {
         // generate a channel for the receiver to send responses back to
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
 
-        let send = self.sender.send(RespondableRPC { rpc: update, sender });
+        let send = self.sender.send(RespondableRPC { rpc: RPC::Request(request), sender });
         if let Err(e) = send {
             return Err(e.into());
         }
