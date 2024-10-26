@@ -122,11 +122,13 @@ impl Node {
             op_number: self.state.op_number,
             payload: request.payload,
             commit_number: self.state.commit_number,
-            commit_previous_op_number: None,
         });
 
         // TODO: up call to application
         let response_payload = vec![];
+
+        // increment commit number
+        self.state.commit_number += 1;
 
         Ok(Reply {
             view_number: self.state.view_number,
@@ -146,7 +148,7 @@ impl Node {
     }
 
     fn handle_prepare(&mut self, rpc: Prepare) -> Result<PrepareOk, Box<dyn std::error::Error>> {
-        // TODO: check that this OP number is in order
+        // TODO: check that this OP number is in order, if not, state transfer
 
         // update the op number
         self.state.op_number += 1;
@@ -154,10 +156,10 @@ impl Node {
         // append to the log
         self.state.log.push(rpc.payload.clone());
 
-        if let Some(committable_op_number) = rpc.commit_previous_op_number {
-            // TODO: up call to application
-            panic!("todo");
-        }
+        // TODO: verify that the commit number is in the log, if not, state transfer
+        // TODO: call previous commit to application code from log
+        // increment commit number
+        self.state.commit_number += 1;
 
         Ok(PrepareOk {
             view_number: self.state.view_number,
