@@ -181,7 +181,14 @@ impl Node {
                     .await?;
                 Ok(None)
             }
-            _ => panic!("Unsupported RPC"),
+            RPC::Request(request) => todo!(),
+            RPC::PrepareOk(prepare_ok) => todo!(),
+            RPC::Reply(reply) => todo!(),
+            RPC::StartViewChange(start_view_change) => todo!(),
+            RPC::DoViewChange(do_view_change) => todo!(),
+            RPC::StartView(start_view) => todo!(),
+            RPC::Recovery(recovery) => todo!(),
+            RPC::RecoveryResponse(recovery_response) => todo!(),
         }
     }
 
@@ -277,7 +284,7 @@ impl Node {
         &mut self,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        panic!("Not implemented");
+        todo!()
     }
 
     pub async fn start(self) -> Result<(), Box<dyn std::error::Error>> {
