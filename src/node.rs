@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use crate::rpc::{Prepare, Reply, Request, RespondableRPC, RPC};
+use crate::rpc::{Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC};
 
 #[derive(Debug)]
 pub struct Node {
@@ -51,7 +51,7 @@ pub struct NodeState {
     pub view_number: usize,
     pub status: NodeStatus,
     pub op_number: usize,
-    log: Vec<Request>, // TODO: make this a trait so it can be modular
+    log: Vec<Vec<u8>>, // TODO: make this a trait so it can be modular
     pub commit_number: usize,
     client_table: HashMap<usize, ClientTableEntry>,
 }
@@ -109,7 +109,7 @@ impl Node {
         self.state.op_number += 1;
 
         // append to the log
-        self.state.log.push(request.clone());
+        self.state.log.push(request.payload.clone());
 
         // Update the client table only if it's not a new client (we already updated the request number)
         if !new_client {
@@ -122,6 +122,7 @@ impl Node {
             op_number: self.state.op_number,
             payload: request.payload,
             commit_number: self.state.commit_number,
+            commit_previous_op_number: None,
         });
 
         // TODO: up call to application
@@ -135,7 +136,34 @@ impl Node {
     }
 
     pub fn handle_peer_rpc(&mut self, rpc: RPC) -> Result<RPC, Box<dyn std::error::Error>> {
-        panic!("Not implemented");
+        match rpc {
+            RPC::Prepare(prepare) => {
+                let response = self.handle_prepare(prepare)?;
+                Ok(RPC::PrepareOk(response))
+            },
+            _ => panic!("Unsupported RPC"),
+        }
+    }
+
+    fn handle_prepare(&mut self, rpc: Prepare) -> Result<PrepareOk, Box<dyn std::error::Error>> {
+        // TODO: check that this OP number is in order
+
+        // update the op number
+        self.state.op_number += 1;
+
+        // append to the log
+        self.state.log.push(rpc.payload.clone());
+
+        if let Some(committable_op_number) = rpc.commit_previous_op_number {
+            // TODO: up call to application
+            panic!("todo");
+        }
+
+        Ok(PrepareOk {
+            view_number: self.state.view_number,
+            op_number: self.state.op_number,
+            node_id: self.id,
+        })
     }
 
     pub async fn start(self) -> Result<(), Box<dyn std::error::Error>> {

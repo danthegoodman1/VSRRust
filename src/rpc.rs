@@ -35,6 +35,7 @@ pub struct Prepare {
     pub payload: Vec<u8>,
     pub op_number: usize,
     pub commit_number: usize,
+    pub commit_previous_op_number: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
