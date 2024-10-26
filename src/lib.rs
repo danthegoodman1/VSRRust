@@ -1,2 +1,3 @@
-pub mod rpc;
+pub mod client;
 pub mod node;
+pub mod rpc;
