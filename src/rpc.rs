@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RPC {
     Request(Request),
     Prepare(Prepare),
@@ -16,7 +19,7 @@ pub struct RespondableRPC {
     pub sender: tokio::sync::mpsc::Sender<RPC>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
     /// The operation and its arguments
     pub payload: Vec<u8>,
@@ -26,7 +29,7 @@ pub struct Request {
     pub request_number: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Prepare {
     pub view_number: usize,
     pub payload: Vec<u8>,
@@ -34,33 +37,33 @@ pub struct Prepare {
     pub commit_number: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareOk {
     pub view_number: usize,
     pub op_number: usize,
     pub node_id: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Reply {
     pub view_number: usize,
     pub request_number: usize,
     pub payload: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Commit {
     pub view_number: usize,
     pub commit_number: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StartViewChange {
     pub new_view_number: usize,
     pub node_id: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DoViewChange {
     pub new_view_number: usize,
     pub log: Vec<Request>,
@@ -70,7 +73,7 @@ pub struct DoViewChange {
     pub node_id: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StartView {
     pub new_view_number: usize,
     pub log: Vec<Request>,
@@ -78,13 +81,13 @@ pub struct StartView {
     pub commit_number: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Recovery {
     pub node_id: usize,
     pub nonce: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RecoveryResponse {
     pub view_number: usize,
     pub nonce: usize,
