@@ -12,16 +12,25 @@ pub struct LogEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LogEntryKey(usize, usize);
+pub struct LogEntryKey {
+    pub view_number: usize,
+    pub op_number: usize,
+}
 
 impl LogEntry {
     pub fn key(&self) -> LogEntryKey {
-        LogEntryKey(self.view_number, self.op_number)
+        LogEntryKey {
+            view_number: self.view_number,
+            op_number: self.op_number,
+        }
     }
 }
 
 impl LogEntryKey {
     pub fn new(view_number: usize, op_number: usize) -> Self {
-        Self(view_number, op_number)
+        Self {
+            view_number,
+            op_number,
+        }
     }
 }

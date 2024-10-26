@@ -1,14 +1,12 @@
 use std::{
-    cmp::Ordering,
     collections::{BTreeMap, HashMap},
     fmt,
+    ops::Bound,
 };
-
-use serde::{Deserialize, Serialize};
 
 use crate::{
     log::{LogEntry, LogEntryKey},
-    rpc::{Commit, Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC},
+    rpc::{Prepare, PrepareOk, Reply, Request, RespondableRPC, RPC},
 };
 
 #[derive(Debug)]
@@ -156,13 +154,11 @@ impl Node {
             commit_number: self.state.commit_number,
         });
 
-        // TODO: send RPC to other replicas
+        // TODO: send RPC to other replicas and wait for f responses
 
-        // up call to application
-        let application_response = self.upcall_application(request.payload).await?;
-
-        // increment commit number
-        self.state.commit_number += 1;
+        let application_response = self
+            .commit_op(self.state.view_number, self.state.op_number)
+            .await?;
 
         Ok(Reply {
             view_number: self.state.view_number,
@@ -195,6 +191,11 @@ impl Node {
         };
         self.state.log.insert(log_entry.key(), log_entry);
 
+        if rpc.commit_number > 0 {
+            // TODO: This could be launched in the background
+            self.commit_op(rpc.view_number, rpc.commit_number).await?;
+        }
+
         Ok(PrepareOk {
             view_number: self.state.view_number,
             op_number: self.state.op_number,
@@ -202,23 +203,32 @@ impl Node {
         })
     }
 
-    /// In this case, the commit number is the op number
+    /// In this case, the commit number is the op number. Returns the application response.
     async fn commit_op(
         &mut self,
         view_number: usize,
         commit_number: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: verify that the commit number with view number is in the log, if not, state transfer
-        // TODO: can do this all in the background since it's in the log, as long as it's in order, so we can batch the upcalls
-        // TODO: we can also commit anything lower than this in the log if it has not been too
-
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         // Get the committed request without holding a mutable reference
+        // TODO: if missing, state transfer
         let committed_request = self
             .state
             .log
             .get(&LogEntryKey::new(view_number, commit_number))
             .cloned()
             .ok_or_else(|| Box::<dyn std::error::Error>::from("Log entry not found"))?;
+
+        // TODO: we can also commit anything lower than this in the log if it has not been too. But maybe not because otherwise that means prepare RPCs didn't come in order?
+        let commitable_requests: Vec<(LogEntryKey, LogEntry)> = self
+            .state
+            .log
+            .range((
+                Bound::Unbounded,
+                Bound::Included(LogEntryKey::new(view_number, commit_number)),
+            ))
+            .take_while(|(key, _)| key.op_number <= commit_number)
+            .map(|(key, entry)| (key.clone(), entry.clone()))
+            .collect();
 
         // Call previous commit to application code from log
         let application_response = self
@@ -229,9 +239,9 @@ impl Node {
         self.state.commit_number += 1;
 
         // Update the client table
-        self.update_client_table(&committed_request, application_response);
+        self.update_client_table(&committed_request, application_response.clone());
 
-        Ok(())
+        Ok(application_response)
     }
 
     fn update_client_table(&mut self, committed_request: &LogEntry, application_response: Vec<u8>) {
